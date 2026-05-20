@@ -281,12 +281,15 @@ mcpServers:
   # + Browserless volume in Phase 3.7 to restore persistence with HIL.
   playwright:
     type: stdio
-    command: npx
+    # sh wrapper because LibreChat's ${} substitution only applies inside the
+    # env: block, NOT inside args[]. The cdp-endpoint URL needs the token
+    # inlined, which we do at runtime via $BROWSERLESS_TOKEN shell expansion.
+    command: sh
     args:
-      - -y
-      - "@playwright/mcp"
-      - "--browser=chromium"
-      - "--cdp-endpoint=ws://browserless.railway.internal:3000?token=${BROWSERLESS_TOKEN}"
+      - -c
+      - 'exec npx -y @playwright/mcp --browser=chromium --cdp-endpoint="ws://browserless.railway.internal:3000?token=$BROWSERLESS_TOKEN"'
+    env:
+      BROWSERLESS_TOKEN: "${BROWSERLESS_TOKEN}"
     initTimeout: 300000
     timeout: 180000
     chatMenu: true
