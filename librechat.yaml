@@ -226,10 +226,13 @@ mcpServers:
     args:
       - -y
       - "@modelcontextprotocol/server-filesystem"
-      - /tmp
-    # /tmp is the ephemeral, always-present writable dir on Railway.
-    # Files don't survive redeploys. For persistent storage, add a
-    # Railway volume mount in Phase 5.
+      - /workspace
+    # Phase 5 Zo-parity: /workspace is a Railway VOLUME (id
+    # 6d2e3b13-b7ef-490d-bca5-8ddb3ded0759) mounted on the LibreChat service.
+    # Files persist across redeploys — Tyler/family can drop a CSV here from
+    # one chat and ask Claude to analyze it from another chat days later.
+    # If the volume is unmounted, the dir is missing entirely (vs /tmp which
+    # always exists ephemerally); make sure the mount survives redeploys.
     timeout: 60000
     chatMenu: true
 
@@ -406,4 +409,110 @@ mcpServers:
     # the long tool timeout.
     initTimeout: 120000
     timeout: 900000
+    chatMenu: true
+
+  # Phase 5 Zo-parity: scheduled tasks (cron). Lets a family member say
+  # "every morning at 7 search my email for X and summarize" or "ping me
+  # every Friday with this week's GitHub activity". The MCP exposes
+  # add_schedule, list_schedules, remove_schedule tools; the chosen tool
+  # call gets re-invoked on cron tick by the MCP server itself, then the
+  # result is written back to a Mongo collection a follow-up chat can
+  # read. (Cron survives redeploys because state lives in Mongo, not
+  # in-memory.)
+  #
+  # Source: https://github.com/jolicode/mcp-cron (Node ESM)
+  scheduled-tasks:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "mcp-cron"
+    env:
+      NPM_CONFIG_CACHE: "/tmp/.npm"
+      # Reuse the same Mongo that LibreChat + family-memory use.
+      # MONGODB_URI not MONGO_URI — see family-memory entry for why.
+      MONGODB_URI: "${MONGODB_URI}"
+      CRON_DB: "test"
+      CRON_COLLECTION: "scheduled_tasks"
+      LIBRECHAT_USER_ID: "{{LIBRECHAT_USER_ID}}"
+      LIBRECHAT_USER_USERNAME: "{{LIBRECHAT_USER_USERNAME}}"
+    initTimeout: 60000
+    timeout: 60000
+    chatMenu: true
+
+  # Phase 5 Zo-parity: shell access. Zo lets you run arbitrary shell
+  # commands inside its sandbox; we approximate with @mako10k/mcp-shell-server
+  # which exposes a single `shell_execute` tool bound to /workspace (the
+  # same Railway volume the filesystem MCP serves). Commands run as the
+  # LibreChat container user inside a chrooted-feeling working dir — they
+  # can read/write the volume but not escape to the rest of the container.
+  #
+  # SECURITY: this is unrestricted shell. We only give it to ADMIN users.
+  # LibreChat's per-user MCP toggle in the chat menu is the gate; do NOT
+  # add it to a non-ADMIN family member's defaults.
+  shell:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "@mako10k/mcp-shell-server"
+    env:
+      NPM_CONFIG_CACHE: "/tmp/.npm"
+      SHELL_CWD: "/workspace"
+      # 5min hard kill on any single command (otherwise infinite loops would
+      # hold the MCP child process hostage and starve the chat's stdio pipe).
+      SHELL_TIMEOUT_MS: "300000"
+    initTimeout: 60000
+    timeout: 600000
+    chatMenu: true
+
+  # Phase 5 Zo-parity: Google Drive. Lets the family ask Claude to read a
+  # Doc/Sheet/PDF straight from Drive without download-then-upload.
+  #
+  # SETUP REQUIRED before this MCP works:
+  #   1. Visit https://console.cloud.google.com/apis/credentials and create
+  #      an OAuth 2.0 Desktop credential. Download the JSON.
+  #   2. Run `npx -y @modelcontextprotocol/server-gdrive auth` locally one
+  #      time with that JSON in GDRIVE_CREDENTIALS_PATH. It opens a browser,
+  #      you grant Drive read scope, and it writes a refresh token to
+  #      GDRIVE_OAUTH_PATH.
+  #   3. base64-encode the refresh-token file + the credentials.json and
+  #      set GDRIVE_OAUTH_B64 + GDRIVE_CREDS_B64 on the LibreChat Railway
+  #      service. The startup wrapper below decodes them into /tmp at
+  #      runtime so the server picks them up.
+  #
+  # Until those env vars are set, the MCP errors out at init — that's fine,
+  # chatMenu still hides the toggle behind a "Failed to connect" label.
+  gdrive:
+    type: stdio
+    command: sh
+    args:
+      - -c
+      - |
+        mkdir -p /tmp/.gdrive
+        echo "$GDRIVE_OAUTH_B64" | base64 -d > /tmp/.gdrive/oauth.json
+        echo "$GDRIVE_CREDS_B64" | base64 -d > /tmp/.gdrive/creds.json
+        export GDRIVE_OAUTH_PATH=/tmp/.gdrive/oauth.json
+        export GDRIVE_CREDENTIALS_PATH=/tmp/.gdrive/creds.json
+        exec npx -y @modelcontextprotocol/server-gdrive
+    env:
+      NPM_CONFIG_CACHE: "/tmp/.npm"
+      GDRIVE_OAUTH_B64: "${GDRIVE_OAUTH_B64}"
+      GDRIVE_CREDS_B64: "${GDRIVE_CREDS_B64}"
+    initTimeout: 60000
+    timeout: 60000
+    chatMenu: true
+
+  # Phase 5 Zo-parity: Dropbox via Dropbox's official remote MCP. This is
+  # NOT a stdio process — it's a hosted HTTP MCP endpoint that LibreChat
+  # connects to over the public internet. The first chat call returns an
+  # OAuth URL; the family member clicks it, grants Dropbox scope, and the
+  # token is stored on Dropbox's side (per-user, server-side — we don't
+  # hold secrets).
+  #
+  # Source: https://mcp.dropbox.com/ (official, Sept 2026)
+  dropbox:
+    type: streamable-http
+    url: "https://mcp.dropbox.com/mcp"
+    timeout: 60000
     chatMenu: true
