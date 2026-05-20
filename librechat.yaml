@@ -438,14 +438,38 @@ mcpServers:
     timeout: 600000
     chatMenu: true
 
-  # scheduled-tasks DEFERRED (see Phase 5.1):
-  #   - jolks/mcp-cron is a Go binary built against glibc; Railway runs
-  #     Alpine (musl) and the binary segfaulted silently → 60s timeout.
-  #   - liao1fan/schedule-task-mcp uses node:sqlite which needs Node 22.5+;
-  #     LibreChat-dev ships Node 20.
-  # Next step: build a tiny ~80-line custom MCP using @modelcontextprotocol/sdk
-  # + node-cron + the existing Mongo wallet collection. Track at
-  # NOVA-LC/family-cron-mcp (Phase 5.1).
+  # Phase 5.1: custom Node 20 + Mongo cron MCP because jolks/mcp-cron is
+  # a Go/glibc binary that segfaults on Alpine and schedule-task-mcp needs
+  # Node 22.5+ (node:sqlite). Same Alpine-container gotchas as the other
+  # two NOVA-LC MCPs:
+  #   - tarball URL (no git in Alpine, no `github:owner/repo` shorthand)
+  #   - NPM_CONFIG_CACHE=/tmp/.npm (HOME=/ unwritable)
+  #   - MONGODB_URI not MONGO_URI (LibreChat SENSITIVE_ENV_VARS blocks the latter)
+  #
+  # Tools: schedule_reminder, list_reminders, acknowledge_reminder, cancel_reminder.
+  # Pull-on-chat semantics: fired reminders surface via list_reminders the
+  # next time the user re-engages (LibreChat MCPs can't push into a chat).
+  #
+  # Source: https://github.com/NOVA-LC/family-cron-mcp
+  scheduled-tasks:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "https://github.com/NOVA-LC/family-cron-mcp/archive/refs/heads/main.tar.gz"
+    env:
+      NPM_CONFIG_CACHE: "/tmp/.npm"
+      MONGODB_URI: "${MONGODB_URI}"
+      CRON_DB: "test"
+      CRON_COLLECTION: "family_reminders"
+      LIBRECHAT_USER_ID: "{{LIBRECHAT_USER_ID}}"
+      LIBRECHAT_USER_USERNAME: "{{LIBRECHAT_USER_USERNAME}}"
+      LIBRECHAT_USER_ROLE: "{{LIBRECHAT_USER_ROLE}}"
+    # First call cold-installs from GitHub (~10-15s). Subsequent connections
+    # in the same container reuse npm's cache at /tmp/.npm.
+    initTimeout: 60000
+    timeout: 60000
+    chatMenu: true
 
   # Phase 5 Zo-parity: Dropbox via Dropbox's official remote MCP. Hosted
   # at mcp.dropbox.com — first chat call returns an OAuth URL, family
