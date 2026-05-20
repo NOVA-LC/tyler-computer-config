@@ -122,14 +122,14 @@ rateLimits:
 mcpServers:
   filesystem:
     type: stdio
-    # Boot wrapper: mkdir -p /tmp/workspace (idempotent) then exec the MCP
-    # server. The filesystem MCP package fails fast if the root doesn't exist.
-    # /tmp is ephemeral on Railway â€” survives chat sessions, lost on redeploy.
-    # Replace with a Railway volume mount in Phase 5 if persistent files matter.
-    command: sh
+    command: npx
     args:
-      - -c
-      - "mkdir -p /tmp/workspace && exec npx -y @modelcontextprotocol/server-filesystem /tmp/workspace"
+      - -y
+      - "@modelcontextprotocol/server-filesystem"
+      - /tmp
+    # /tmp is the ephemeral, always-present writable dir on Railway.
+    # Files don't survive redeploys. For persistent storage, add a
+    # Railway volume mount in Phase 5.
     timeout: 60000
     chatMenu: true
 
