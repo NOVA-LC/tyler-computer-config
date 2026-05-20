@@ -466,53 +466,15 @@ mcpServers:
     timeout: 600000
     chatMenu: true
 
-  # Phase 5 Zo-parity: Google Drive. Lets the family ask Claude to read a
-  # Doc/Sheet/PDF straight from Drive without download-then-upload.
+  # Phase 5 Zo-parity DEFERRED entries (gdrive + dropbox) — pulled out
+  # because the first redeploy with them in caused a silent boot failure
+  # (zero log output, Railway marked FAILED after 90s).
   #
-  # SETUP REQUIRED before this MCP works:
-  #   1. Visit https://console.cloud.google.com/apis/credentials and create
-  #      an OAuth 2.0 Desktop credential. Download the JSON.
-  #   2. Run `npx -y @modelcontextprotocol/server-gdrive auth` locally one
-  #      time with that JSON in GDRIVE_CREDENTIALS_PATH. It opens a browser,
-  #      you grant Drive read scope, and it writes a refresh token to
-  #      GDRIVE_OAUTH_PATH.
-  #   3. base64-encode the refresh-token file + the credentials.json and
-  #      set GDRIVE_OAUTH_B64 + GDRIVE_CREDS_B64 on the LibreChat Railway
-  #      service. The startup wrapper below decodes them into /tmp at
-  #      runtime so the server picks them up.
+  # gdrive: @modelcontextprotocol/server-gdrive is deprecated by Anthropic
+  # AND it needs an OAuth Desktop credential set up offline before it can
+  # init. Reintroduce when GDRIVE_OAUTH_B64 + GDRIVE_CREDS_B64 are ready,
+  # or migrate to a community-maintained fork.
   #
-  # Until those env vars are set, the MCP errors out at init — that's fine,
-  # chatMenu still hides the toggle behind a "Failed to connect" label.
-  gdrive:
-    type: stdio
-    command: sh
-    args:
-      - -c
-      - |
-        mkdir -p /tmp/.gdrive
-        echo "$GDRIVE_OAUTH_B64" | base64 -d > /tmp/.gdrive/oauth.json
-        echo "$GDRIVE_CREDS_B64" | base64 -d > /tmp/.gdrive/creds.json
-        export GDRIVE_OAUTH_PATH=/tmp/.gdrive/oauth.json
-        export GDRIVE_CREDENTIALS_PATH=/tmp/.gdrive/creds.json
-        exec npx -y @modelcontextprotocol/server-gdrive
-    env:
-      NPM_CONFIG_CACHE: "/tmp/.npm"
-      GDRIVE_OAUTH_B64: "${GDRIVE_OAUTH_B64}"
-      GDRIVE_CREDS_B64: "${GDRIVE_CREDS_B64}"
-    initTimeout: 60000
-    timeout: 60000
-    chatMenu: true
-
-  # Phase 5 Zo-parity: Dropbox via Dropbox's official remote MCP. This is
-  # NOT a stdio process — it's a hosted HTTP MCP endpoint that LibreChat
-  # connects to over the public internet. The first chat call returns an
-  # OAuth URL; the family member clicks it, grants Dropbox scope, and the
-  # token is stored on Dropbox's side (per-user, server-side — we don't
-  # hold secrets).
-  #
-  # Source: https://mcp.dropbox.com/ (official, Sept 2026)
-  dropbox:
-    type: streamable-http
-    url: "https://mcp.dropbox.com/mcp"
-    timeout: 60000
-    chatMenu: true
+  # dropbox: type "streamable-http" is in LibreChat docs but may not be
+  # wired in this image tag yet. Reintroduce after confirming the running
+  # LibreChat version handles it, OR install a stdio bridge.
