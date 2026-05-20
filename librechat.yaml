@@ -327,21 +327,28 @@ mcpServers:
   # role (Tyler) can forget anyone's.
   family-memory:
     type: stdio
-    # sh wrapper because LibreChat's ${VAR} substitution does NOT work in
-    # MCP env: blocks (only {{LIBRECHAT_USER_*}} does). Confirmed via
-    # diagnostic stderr — child saw MONGODB_URI literally as "${MONGO_URI}".
-    # Same fix the sibling chat used for Phase 3.6 playwright. The shell
-    # inherits MONGO_URI from the LibreChat container's process env.
+    # IMPORTANT setup notes for anyone hacking on this entry:
     #
-    # Also: Alpine container has no `git`, so we use the tarball URL not
-    # `github:owner/repo`. And HOME=/ is unwritable, so NPM_CONFIG_CACHE
-    # points at /tmp.
-    command: sh
+    #   1. LibreChat blocks substitution of `${MONGO_URI}` via a hardcoded
+    #      SENSITIVE_ENV_VARS list (packages/data-provider/src/utils.ts).
+    #      We side-step by referencing `${MONGODB_URI}` — a separate Railway
+    #      service var set to `${{ MongoDB.MONGO_PRIVATE_URL }}` (Railway
+    #      cross-service ref), which resolves to the same Mongo URI at
+    #      container start. MONGODB_URI is NOT on LibreChat's blocklist.
+    #
+    #   2. Alpine LibreChat container has no `git` binary, so we use a
+    #      tarball URL (https://github.com/.../archive/.../main.tar.gz)
+    #      instead of npm's `github:owner/repo` shorthand (which uses git).
+    #
+    #   3. Container runs non-root with HOME=/, so npm's default cache path
+    #      /.npm is EACCES. Point cache at /tmp/.npm.
+    command: npx
     args:
-      - -c
-      - 'exec env MONGODB_URI="$MONGO_URI" npx -y "https://github.com/NOVA-LC/family-memory-mcp/archive/refs/heads/main.tar.gz"'
+      - -y
+      - "https://github.com/NOVA-LC/family-memory-mcp/archive/refs/heads/main.tar.gz"
     env:
       NPM_CONFIG_CACHE: "/tmp/.npm"
+      MONGODB_URI: "${MONGODB_URI}"
       FAMILY_MEMORY_DB: "test"
       FAMILY_MEMORY_COLLECTION: "family_facts"
       LIBRECHAT_USER_ID: "{{LIBRECHAT_USER_ID}}"
@@ -369,22 +376,26 @@ mcpServers:
   # built-in per-user wallet that this MCP debits.
   claude-code:
     type: stdio
-    # sh wrapper for ${VAR} substitution — see family-memory entry above.
-    # All the secret-ish env (ANTHROPIC_API_KEY, MONGO_URI, SEARXNG_URL,
-    # E2B_API_KEY, BROWSERLESS_TOKEN) must be passed via the shell so they
-    # resolve from the LibreChat container's process env at spawn time.
-    command: sh
+    # See family-memory entry above for the three Alpine-container gotchas:
+    # MONGODB_URI not MONGO_URI (sensitive-var blocklist), tarball URL not
+    # github: (no git), NPM_CONFIG_CACHE=/tmp (HOME=/ unwritable).
+    command: npx
     args:
-      - -c
-      - 'exec env ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" MONGODB_URI="$MONGO_URI" SEARXNG_URL="$SEARXNG_URL" E2B_API_KEY="$E2B_API_KEY" PLAYWRIGHT_CDP_ENDPOINT="ws://browserless.railway.internal:3000?token=$BROWSERLESS_TOKEN" npx -y "https://github.com/NOVA-LC/claude-code-mcp/archive/refs/heads/main.tar.gz"'
+      - -y
+      - "https://github.com/NOVA-LC/claude-code-mcp/archive/refs/heads/main.tar.gz"
     env:
       NPM_CONFIG_CACHE: "/tmp/.npm"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      MONGODB_URI: "${MONGODB_URI}"
       BILLING_DB: "test"
       BILLING_ENABLED: "true"
       BILLING_MARKUP: "1.2"
       BILLING_MIN_USD: "0.10"
       MAX_BUDGET_USD: "2.00"
       RESEARCH_MODEL: "sonnet"
+      SEARXNG_URL: "${SEARXNG_URL}"
+      PLAYWRIGHT_CDP_ENDPOINT: "ws://browserless.railway.internal:3000?token=${BROWSERLESS_TOKEN}"
+      E2B_API_KEY: "${E2B_API_KEY}"
       E2B_RATE_PER_SEC: "0.00005556"
       LIBRECHAT_USER_ID: "{{LIBRECHAT_USER_ID}}"
       LIBRECHAT_USER_EMAIL: "{{LIBRECHAT_USER_EMAIL}}"
