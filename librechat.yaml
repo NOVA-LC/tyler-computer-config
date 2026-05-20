@@ -330,8 +330,17 @@ mcpServers:
     command: npx
     args:
       - -y
-      - "github:NOVA-LC/family-memory-mcp"
+      # Tarball URL instead of github:NOVA-LC/... — the Alpine LibreChat
+      # container has no `git` installed, and npm's github: spec uses git
+      # clone. Tarball install works without git.
+      - "https://github.com/NOVA-LC/family-memory-mcp/archive/refs/heads/main.tar.gz"
     env:
+      # Alpine container runs as non-root with HOME=/, so npm's default
+      # cache path (/.npm) is EACCES on first write. Point cache at /tmp.
+      # Discovered after both family-memory + claude-code MCPs silently
+      # died for two deploys with "Connection closed" before any user
+      # code ran — npm install was failing inside `npx -y github:...`.
+      NPM_CONFIG_CACHE: "/tmp/.npm"
       MONGODB_URI: "${MONGO_URI}"
       FAMILY_MEMORY_DB: "test"
       FAMILY_MEMORY_COLLECTION: "family_facts"
@@ -340,7 +349,7 @@ mcpServers:
       LIBRECHAT_USER_USERNAME: "{{LIBRECHAT_USER_USERNAME}}"
       LIBRECHAT_USER_ROLE: "{{LIBRECHAT_USER_ROLE}}"
     # First call cold-installs from GitHub (~10-15s). Subsequent
-    # connections in the same container reuse npm's cache.
+    # connections in the same container reuse npm's cache at /tmp/.npm.
     initTimeout: 60000
     timeout: 60000
     chatMenu: true
@@ -363,8 +372,11 @@ mcpServers:
     command: npx
     args:
       - -y
-      - "github:NOVA-LC/claude-code-mcp"
+      # Tarball URL — Alpine container has no git; see family-memory entry above.
+      - "https://github.com/NOVA-LC/claude-code-mcp/archive/refs/heads/main.tar.gz"
     env:
+      # See family-memory entry above — npm cache must be /tmp/.npm in Alpine.
+      NPM_CONFIG_CACHE: "/tmp/.npm"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
       MONGODB_URI: "${MONGO_URI}"
       BILLING_DB: "test"
