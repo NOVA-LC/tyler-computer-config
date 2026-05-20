@@ -18,6 +18,20 @@ interface:
 registration:
   socialLogins: []
 
+# Phase 4.5: per-user wallet (Path B — Tyler is the bank).
+# 1,000,000 tokenCredits = $1.00. Each new family member starts with $3 of
+# credit (3,000,000). Every chat message AND every claude-code:deep_research
+# call deducts from this same wallet. When a user hits zero, LibreChat
+# blocks them with "out of credits" — Tyler tops up via the `top_up` MCP
+# tool after a Venmo arrives.
+#
+# Tyler should also re-run with autoRefillEnabled: true and a monthly
+# refillAmount once usage patterns settle (Phase 4.6).
+balance:
+  enabled: true
+  startBalance: 3000000   # $3.00 starting credit
+  autoRefillEnabled: false
+
 endpoints:
   anthropic:
     apiKey: "${ANTHROPIC_API_KEY}"
@@ -329,4 +343,45 @@ mcpServers:
     # connections in the same container reuse npm's cache.
     initTimeout: 60000
     timeout: 60000
+    chatMenu: true
+
+  # Phase 4.5: Claude Code as a deep-research tool.
+  # Spawns the real @anthropic-ai/claude-code CLI headless with the
+  # verified-human-sources doctrine baked in, inherits the family's SearXNG
+  # + Playwright (Browserless CDP) stack via auto-generated .mcp.json, and
+  # CHARGES the calling user against their LibreChat balance with a 1.2×
+  # markup. Tyler tops up via the `top_up` tool after a family Venmo.
+  #
+  # Three tools exposed: deep_research (everyone), my_balance (everyone),
+  # top_up (ADMIN only — Tyler).
+  #
+  # Source: https://github.com/NOVA-LC/claude-code-mcp
+  # See also: top of file `balance:` block below — enables LibreChat's
+  # built-in per-user wallet that this MCP debits.
+  claude-code:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "github:NOVA-LC/claude-code-mcp"
+    env:
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      MONGODB_URI: "${MONGO_URI}"
+      BILLING_DB: "test"
+      BILLING_ENABLED: "true"
+      BILLING_MARKUP: "1.2"
+      BILLING_MIN_USD: "0.10"
+      MAX_BUDGET_USD: "2.00"
+      RESEARCH_MODEL: "sonnet"
+      SEARXNG_URL: "${SEARXNG_URL}"
+      PLAYWRIGHT_CDP_ENDPOINT: "ws://browserless.railway.internal:3000?token=${BROWSERLESS_TOKEN}"
+      LIBRECHAT_USER_ID: "{{LIBRECHAT_USER_ID}}"
+      LIBRECHAT_USER_EMAIL: "{{LIBRECHAT_USER_EMAIL}}"
+      LIBRECHAT_USER_USERNAME: "{{LIBRECHAT_USER_USERNAME}}"
+      LIBRECHAT_USER_ROLE: "{{LIBRECHAT_USER_ROLE}}"
+    # First call cold-installs ~100MB of deps from GitHub (~30-60s). A
+    # single deep_research call can easily run 5-15 minutes, hence
+    # the long tool timeout.
+    initTimeout: 120000
+    timeout: 900000
     chatMenu: true
