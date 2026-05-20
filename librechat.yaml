@@ -236,29 +236,32 @@ mcpServers:
   # The sh wrapper exists because @modelcontextprotocol/server-filesystem
   # refuses to start if the directory doesn't exist (ENOENT). We mkdir
   # at startup so the volume is initialized on first boot after redeploy.
-  # Phase 5.1: tries /data/workspace (persistent) first; falls back to /tmp
-  # if /data isn't writable by the MCP child process user. The Chromium
-  # profile lives at /data/chromium-profile and works because Playwright's
-  # Browserless container creates it as root — but other MCPs spawned by
-  # LibreChat (which itself runs non-root) may not have write access to /data.
+  # Phase 5.1 outcome: filesystem MCP is ephemeral at /tmp/workspace.
   #
-  # The wrapper tries to mkdir; on EACCES it falls back. Either way the MCP
-  # gets a working dir, just maybe ephemeral on cold-start with new volume.
+  # Tried two routes to persistent storage:
+  #   1. Second Railway volume mounted at /workspace → caused immediate
+  #      boot crash with 0 logs (Railway/LibreChat container interaction
+  #      doesn't accept a 2nd volume on this service).
+  #   2. Subdir of existing /data volume → /data is root-owned and the
+  #      MCP child process (spawned by LibreChat running non-root) gets
+  #      EACCES on mkdir. The Chromium profile at /data/chromium-profile
+  #      works only because the Browserless container itself runs as root.
+  #
+  # The "real" Zo-style persistent workspace path is to either (a) custom
+  # MCP wrapping Mongo GridFS, or (b) custom LibreChat Dockerfile that
+  # chowns /data on entrypoint. Both are Phase 5.2.
+  #
+  # In the meantime: family members use LibreChat's built-in file-upload
+  # UI for any file they want to PERSIST — those go through Mongo GridFS
+  # automatically and survive redeploys. The filesystem MCP is for the AI
+  # to scratch-write files during a session (CSVs to process, scripts to
+  # run, etc.) — ephemeral is acceptable for that.
   filesystem:
     type: stdio
     command: sh
     args:
       - -c
-      - |
-        DIR=/data/workspace
-        if ! mkdir -p "$DIR" 2>/dev/null; then
-          DIR=/tmp/workspace
-          mkdir -p "$DIR"
-          echo "[filesystem-mcp wrapper] /data not writable, falling back to $DIR (ephemeral)" >&2
-        else
-          echo "[filesystem-mcp wrapper] using persistent $DIR" >&2
-        fi
-        exec npx -y @modelcontextprotocol/server-filesystem "$DIR"
+      - "mkdir -p /tmp/workspace && exec npx -y @modelcontextprotocol/server-filesystem /tmp/workspace"
     timeout: 60000
     chatMenu: true
 
@@ -462,15 +465,7 @@ mcpServers:
     command: sh
     args:
       - -c
-      - |
-        DIR=/data/workspace
-        if ! mkdir -p "$DIR" 2>/dev/null; then
-          DIR=/tmp/workspace
-          mkdir -p "$DIR"
-        fi
-        cd "$DIR" || exit 1
-        echo "[shell-mcp wrapper] cwd=$DIR" >&2
-        exec npx -y mcp-server-commands
+      - "mkdir -p /tmp/workspace && cd /tmp/workspace && exec npx -y mcp-server-commands"
     env:
       NPM_CONFIG_CACHE: "/tmp/.npm"
     initTimeout: 60000
