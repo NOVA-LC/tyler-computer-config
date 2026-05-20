@@ -1,0 +1,179 @@
+version: 1.2.8
+cache: true
+
+# Hot-reloaded by Railway via CONFIG_PATH env var pointing to:
+# https://raw.githubusercontent.com/NOVA-LC/tyler-computer-config/main/librechat.yaml
+# Push to main â†’ restart api â†’ changes live.
+
+interface:
+  customWelcome: "Welcome to Tyler-Computer. Family AI. Pick Claude (default) or a different model."
+  endpointsMenu: true
+  modelSelect: true
+  parameters: true
+  sidePanel: true
+  presets: true
+  prompts: true
+  bookmarks: true
+
+registration:
+  socialLogins: []
+
+endpoints:
+  anthropic:
+    apiKey: "${ANTHROPIC_API_KEY}"
+    models:
+      - "claude-opus-4-7"
+      - "claude-sonnet-4-6"
+      - "claude-haiku-4-5-20251001"
+    titleModel: "claude-haiku-4-5-20251001"
+    titleConvo: true
+    modelDisplayLabel: "Claude"
+
+  openAI:
+    apiKey: "${OPENAI_API_KEY}"
+    models:
+      - "gpt-5.5"
+      - "gpt-5"
+      - "gpt-4.1"
+      - "gpt-4.1-mini"
+      - "o4-mini"
+    titleModel: "gpt-4.1-mini"
+    titleConvo: true
+    modelDisplayLabel: "OpenAI"
+
+  google:
+    apiKey: "${GOOGLE_KEY}"
+    models:
+      - "gemini-2.5-pro"
+      - "gemini-2.5-flash"
+      - "gemini-2.0-flash"
+    titleModel: "gemini-2.5-flash"
+    titleConvo: true
+    modelDisplayLabel: "Gemini"
+
+# Model presets â€” Claude Sonnet is the "default" because it's first in the list
+# AND prioritize: true sets it as the default for new conversations.
+modelSpecs:
+  enforce: false
+  prioritize: true
+  list:
+    - name: "claude-sonnet"
+      label: "Claude Sonnet 4.6 (default)"
+      default: true
+      preset:
+        endpoint: "anthropic"
+        model: "claude-sonnet-4-6"
+        modelLabel: "Claude Sonnet"
+
+    - name: "claude-opus"
+      label: "Claude Opus 4.7 (heavy reasoning)"
+      preset:
+        endpoint: "anthropic"
+        model: "claude-opus-4-7"
+        modelLabel: "Claude Opus"
+
+    - name: "claude-haiku"
+      label: "Claude Haiku 4.5 (fast/cheap)"
+      preset:
+        endpoint: "anthropic"
+        model: "claude-haiku-4-5-20251001"
+        modelLabel: "Claude Haiku"
+
+    - name: "gpt-5"
+      label: "GPT-5"
+      preset:
+        endpoint: "openAI"
+        model: "gpt-5"
+        modelLabel: "GPT-5"
+
+    - name: "gemini-pro"
+      label: "Gemini 2.5 Pro"
+      preset:
+        endpoint: "google"
+        model: "gemini-2.5-pro"
+        modelLabel: "Gemini 2.5 Pro"
+
+rateLimits:
+  fileUploads:
+    ipMax: 100
+    ipWindowInMinutes: 60
+    userMax: 50
+    userWindowInMinutes: 60
+  conversationsImport:
+    ipMax: 100
+    ipWindowInMinutes: 60
+    userMax: 50
+    userWindowInMinutes: 60
+  tts:
+    ipMax: 100
+    ipWindowInMinutes: 60
+    userMax: 50
+    userWindowInMinutes: 60
+
+# MCP servers â€” same pattern as our local install.
+# Railway notes:
+#   - filesystem: rooted at /tmp/workspace inside the container (ephemeral until
+#     we add a Railway volume; survives chat sessions but is lost on redeploy).
+#   - railway: no env token â€” uses configure_api_token tool from chat on first
+#     use (workaround for the GraphQL-during-init bug in @jasontanswe/railway-mcp).
+#   - mcp-searxng: requires SearXNG service in the same Railway project. Will be
+#     added in Phase 2; ${SEARXNG_URL} env var set on the LibreChat service to
+#     the SearXNG service's private domain.
+mcpServers:
+  filesystem:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "@modelcontextprotocol/server-filesystem"
+      - /tmp/workspace
+    timeout: 60000
+    chatMenu: true
+
+  github:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "@modelcontextprotocol/server-github"
+    env:
+      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+    timeout: 60000
+    chatMenu: true
+
+  supabase:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "@supabase/mcp-server-supabase@latest"
+      - "--read-only"
+    env:
+      SUPABASE_ACCESS_TOKEN: "${SUPABASE_ACCESS_TOKEN}"
+    timeout: 60000
+    chatMenu: true
+
+  railway:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "@jasontanswe/railway-mcp"
+    # NO env: RAILWAY_API_TOKEN here â€” skipping it makes the package
+    # respond to MCP init in ~3s instead of timing out on Railway GraphQL
+    # handshake. Set the token at runtime via `configure_api_token` tool
+    # from chat. (Per LibreChat discussion #6629: initTimeout not honored.)
+    timeout: 60000
+    chatMenu: true
+
+  # mcp-searxng (Phase 2 â€” uncomment after SearXNG service is up):
+  # searxng:
+  #   type: stdio
+  #   command: npx
+  #   args:
+  #     - -y
+  #     - "mcp-searxng"
+  #   env:
+  #     SEARXNG_URL: "${SEARXNG_URL}"
+  #   timeout: 60000
+  #   chatMenu: true
