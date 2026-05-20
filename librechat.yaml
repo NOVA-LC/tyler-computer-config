@@ -268,3 +268,24 @@ mcpServers:
       SEARXNG_URL: "${SEARXNG_URL}"
     timeout: 60000
     chatMenu: true
+
+  # Phase 3: Comet-style agentic browser via Microsoft's official Playwright MCP.
+  # Drives a real headless Chromium. First-call downloads Chromium binary
+  # (~200MB) so initTimeout must be generous.
+  # Tools include: browser_navigate, browser_click, browser_type,
+  # browser_take_screenshot, browser_evaluate, browser_snapshot, etc.
+  # If this fails to init on Railway (Chromium needs nss/fontconfig libs that
+  # the librechat-dev image may lack), fall back to a separate Railway service
+  # running mcr.microsoft.com/playwright with `--port` HTTP MCP.
+  playwright:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "@playwright/mcp"
+      - "--headless"
+      - "--browser=chromium"
+      - "--isolated"
+    initTimeout: 300000
+    timeout: 180000
+    chatMenu: true
