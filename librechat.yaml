@@ -375,6 +375,11 @@ mcpServers:
       RESEARCH_MODEL: "sonnet"
       SEARXNG_URL: "${SEARXNG_URL}"
       PLAYWRIGHT_CDP_ENDPOINT: "ws://browserless.railway.internal:3000?token=${BROWSERLESS_TOKEN}"
+      # claude_code (full Claude Code, sandboxed) — set E2B_API_KEY on Railway
+      # to activate. Until then, claude_code returns "need E2B key" instead of
+      # silently failing. Get key from https://e2b.dev.
+      E2B_API_KEY: "${E2B_API_KEY}"
+      E2B_RATE_PER_SEC: "0.00005556"
       LIBRECHAT_USER_ID: "{{LIBRECHAT_USER_ID}}"
       LIBRECHAT_USER_EMAIL: "{{LIBRECHAT_USER_EMAIL}}"
       LIBRECHAT_USER_USERNAME: "{{LIBRECHAT_USER_USERNAME}}"
