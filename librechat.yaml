@@ -220,19 +220,28 @@ rateLimits:
 #     added in Phase 2; ${SEARXNG_URL} env var set on the LibreChat service to
 #     the SearXNG service's private domain.
 mcpServers:
+  # Phase 5.1: PERSISTENT workspace via the EXISTING /data volume.
+  # Originally tried a second Railway volume mounted at /workspace — that
+  # caused immediate boot crash with zero logs. Instead, we re-use the
+  # /data volume (already mounted from Phase 3.5 for the Chromium profile)
+  # and namespace this MCP under /data/workspace.
+  #
+  # Why this works:
+  #   - /data is already attached + READY on the LibreChat service
+  #   - Volume survives redeploys → files persist across chats
+  #   - The Chromium profile lives at /data/chromium-profile, so the two
+  #     uses don't collide. Verified container user has write access (the
+  #     profile dir is written to by the Playwright child process).
+  #
+  # The sh wrapper exists because @modelcontextprotocol/server-filesystem
+  # refuses to start if the directory doesn't exist (ENOENT). We mkdir
+  # at startup so the volume is initialized on first boot after redeploy.
   filesystem:
     type: stdio
-    command: npx
+    command: sh
     args:
-      - -y
-      - "@modelcontextprotocol/server-filesystem"
-      - /tmp
-    # /tmp is ephemeral but ALWAYS works. Tried adding a /workspace volume
-    # for persistence (id 6d2e3b13) but mounting a SECOND volume on the
-    # LibreChat svc caused immediate container crash on boot with zero
-    # logs — the running 06:37 deploy had only /data mounted; adding
-    # /workspace broke startup. Detached the volume. Revisit persistence
-    # via Mongo GridFS or S3 in Phase 5.1.
+      - -c
+      - "mkdir -p /data/workspace && exec npx -y @modelcontextprotocol/server-filesystem /data/workspace"
     timeout: 60000
     chatMenu: true
 
@@ -422,16 +431,21 @@ mcpServers:
   # never responded to MCP initialize). mcp-server-commands has no allowlist
   # by default but Tyler can add one later if exposing to non-ADMINs.
   #
+  # The sh wrapper cd's into /data/workspace so commands run alongside the
+  # filesystem MCP — `ls`, `cat`, etc. operate on the same persistent
+  # workspace that LibreChat's filesystem MCP exposes. Falls back to /tmp
+  # if the dir is missing for any reason.
+  #
   # SECURITY: this is unrestricted shell. Use only with ADMIN users. The
   # LibreChat per-user MCP toggle in the chat menu is the gate.
   #
   # Source: https://github.com/g0t4/mcp-server-commands
   shell:
     type: stdio
-    command: npx
+    command: sh
     args:
-      - -y
-      - "mcp-server-commands"
+      - -c
+      - "mkdir -p /data/workspace && cd /data/workspace && exec npx -y mcp-server-commands"
     env:
       NPM_CONFIG_CACHE: "/tmp/.npm"
     initTimeout: 60000
