@@ -447,15 +447,24 @@ mcpServers:
   # + node-cron + the existing Mongo wallet collection. Track at
   # NOVA-LC/family-cron-mcp (Phase 5.1).
 
-  # Phase 5 Zo-parity DEFERRED entries (gdrive + dropbox) — pulled out
-  # because the first redeploy with them in caused a silent boot failure
-  # (zero log output, Railway marked FAILED after 90s).
+  # Phase 5 Zo-parity: Dropbox via Dropbox's official remote MCP. Hosted
+  # at mcp.dropbox.com — first chat call returns an OAuth URL, family
+  # member grants Dropbox scope, token is stored on Dropbox's side
+  # (per-user, server-side, we don't hold secrets).
   #
-  # gdrive: @modelcontextprotocol/server-gdrive is deprecated by Anthropic
-  # AND it needs an OAuth Desktop credential set up offline before it can
-  # init. Reintroduce when GDRIVE_OAUTH_B64 + GDRIVE_CREDS_B64 are ready,
-  # or migrate to a community-maintained fork.
+  # streamable-http is the documented LibreChat MCP type per
+  # https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers
+  # First attempt was rolled back as part of the /workspace volume crash;
+  # re-introducing in isolation to verify on the current image tag.
   #
-  # dropbox: type "streamable-http" is in LibreChat docs but may not be
-  # wired in this image tag yet. Reintroduce after confirming the running
-  # LibreChat version handles it, OR install a stdio bridge.
+  # Source: https://mcp.dropbox.com/ (official, Sept 2026)
+  dropbox:
+    type: streamable-http
+    url: "https://mcp.dropbox.com/mcp"
+    timeout: 60000
+    chatMenu: true
+
+  # gdrive DEFERRED: @modelcontextprotocol/server-gdrive is deprecated by
+  # Anthropic AND needs an OAuth Desktop credential set up offline before
+  # it can init. Reintroduce when GDRIVE_OAUTH_B64 + GDRIVE_CREDS_B64 are
+  # ready, or migrate to a community-maintained fork.
