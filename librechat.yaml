@@ -411,62 +411,41 @@ mcpServers:
     timeout: 900000
     chatMenu: true
 
-  # Phase 5 Zo-parity: scheduled tasks (cron). Lets a family member say
-  # "every morning at 7 search my email for X and summarize" or "ping me
-  # every Friday with this week's GitHub activity". The MCP exposes
-  # add_schedule, list_schedules, remove_schedule tools; the chosen tool
-  # call gets re-invoked on cron tick by the MCP server itself, then the
-  # result is written back to a Mongo collection a follow-up chat can
-  # read. (Cron survives redeploys because state lives in Mongo, not
-  # in-memory.)
-  #
-  # Source: https://github.com/jolicode/mcp-cron (Node ESM)
-  scheduled-tasks:
-    type: stdio
-    command: npx
-    args:
-      - -y
-      - "mcp-cron"
-    env:
-      NPM_CONFIG_CACHE: "/tmp/.npm"
-      # Reuse the same Mongo that LibreChat + family-memory use.
-      # MONGODB_URI not MONGO_URI — see family-memory entry for why.
-      MONGODB_URI: "${MONGODB_URI}"
-      CRON_DB: "test"
-      CRON_COLLECTION: "scheduled_tasks"
-      LIBRECHAT_USER_ID: "{{LIBRECHAT_USER_ID}}"
-      LIBRECHAT_USER_USERNAME: "{{LIBRECHAT_USER_USERNAME}}"
-    initTimeout: 60000
-    timeout: 60000
-    chatMenu: true
-
   # Phase 5 Zo-parity: shell access. Zo lets you run arbitrary shell
-  # commands inside its sandbox; we approximate with @mako10k/mcp-shell-server
-  # which exposes a single `shell_execute` tool bound to /workspace (the
-  # same Railway volume the filesystem MCP serves). Commands run as the
-  # LibreChat container user inside a chrooted-feeling working dir — they
-  # can read/write the volume but not escape to the rest of the container.
+  # commands inside its sandbox; we approximate with g0t4/mcp-server-commands
+  # which exposes a `run_command` tool that runs the LibreChat container's
+  # /bin/sh with stdin/stdout/stderr capture. Pure Node, no env required,
+  # Alpine-safe — verified handshake on Node 20 LibreChat-dev image.
   #
-  # SECURITY: this is unrestricted shell. We only give it to ADMIN users.
-  # LibreChat's per-user MCP toggle in the chat menu is the gate; do NOT
-  # add it to a non-ADMIN family member's defaults.
+  # We tried @mako10k/mcp-shell-server first but it requires
+  # MCP_SHELL_ALLOWED_COMMANDS or it exits on spawn (instant stdio close,
+  # never responded to MCP initialize). mcp-server-commands has no allowlist
+  # by default but Tyler can add one later if exposing to non-ADMINs.
+  #
+  # SECURITY: this is unrestricted shell. Use only with ADMIN users. The
+  # LibreChat per-user MCP toggle in the chat menu is the gate.
+  #
+  # Source: https://github.com/g0t4/mcp-server-commands
   shell:
     type: stdio
     command: npx
     args:
       - -y
-      - "@mako10k/mcp-shell-server"
+      - "mcp-server-commands"
     env:
       NPM_CONFIG_CACHE: "/tmp/.npm"
-      # /tmp because /workspace volume mount caused container crash. Revisit
-      # in 5.1 when persistence comes back via GridFS/S3.
-      SHELL_CWD: "/tmp"
-      # 5min hard kill on any single command (otherwise infinite loops would
-      # hold the MCP child process hostage and starve the chat's stdio pipe).
-      SHELL_TIMEOUT_MS: "300000"
     initTimeout: 60000
     timeout: 600000
     chatMenu: true
+
+  # scheduled-tasks DEFERRED (see Phase 5.1):
+  #   - jolks/mcp-cron is a Go binary built against glibc; Railway runs
+  #     Alpine (musl) and the binary segfaulted silently → 60s timeout.
+  #   - liao1fan/schedule-task-mcp uses node:sqlite which needs Node 22.5+;
+  #     LibreChat-dev ships Node 20.
+  # Next step: build a tiny ~80-line custom MCP using @modelcontextprotocol/sdk
+  # + node-cron + the existing Mongo wallet collection. Track at
+  # NOVA-LC/family-cron-mcp (Phase 5.1).
 
   # Phase 5 Zo-parity DEFERRED entries (gdrive + dropbox) — pulled out
   # because the first redeploy with them in caused a silent boot failure
