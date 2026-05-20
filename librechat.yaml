@@ -169,14 +169,16 @@ mcpServers:
     timeout: 60000
     chatMenu: true
 
-  # mcp-searxng (Phase 2 â€” uncomment after SearXNG service is up):
-  # searxng:
-  #   type: stdio
-  #   command: npx
-  #   args:
-  #     - -y
-  #     - "mcp-searxng"
-  #   env:
-  #     SEARXNG_URL: "${SEARXNG_URL}"
-  #   timeout: 60000
-  #   chatMenu: true
+  searxng:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "mcp-searxng"
+    env:
+      # SearXNG reachable via Railway internal network (same project).
+      # Set SEARXNG_URL env on the LibreChat service to:
+      # http://searxng.railway.internal:8080
+      SEARXNG_URL: "${SEARXNG_URL}"
+    timeout: 60000
+    chatMenu: true
