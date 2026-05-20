@@ -226,13 +226,13 @@ mcpServers:
     args:
       - -y
       - "@modelcontextprotocol/server-filesystem"
-      - /workspace
-    # Phase 5 Zo-parity: /workspace is a Railway VOLUME (id
-    # 6d2e3b13-b7ef-490d-bca5-8ddb3ded0759) mounted on the LibreChat service.
-    # Files persist across redeploys — Tyler/family can drop a CSV here from
-    # one chat and ask Claude to analyze it from another chat days later.
-    # If the volume is unmounted, the dir is missing entirely (vs /tmp which
-    # always exists ephemerally); make sure the mount survives redeploys.
+      - /tmp
+    # /tmp is ephemeral but ALWAYS works. Tried adding a /workspace volume
+    # for persistence (id 6d2e3b13) but mounting a SECOND volume on the
+    # LibreChat svc caused immediate container crash on boot with zero
+    # logs — the running 06:37 deploy had only /data mounted; adding
+    # /workspace broke startup. Detached the volume. Revisit persistence
+    # via Mongo GridFS or S3 in Phase 5.1.
     timeout: 60000
     chatMenu: true
 
@@ -458,7 +458,9 @@ mcpServers:
       - "@mako10k/mcp-shell-server"
     env:
       NPM_CONFIG_CACHE: "/tmp/.npm"
-      SHELL_CWD: "/workspace"
+      # /tmp because /workspace volume mount caused container crash. Revisit
+      # in 5.1 when persistence comes back via GridFS/S3.
+      SHELL_CWD: "/tmp"
       # 5min hard kill on any single command (otherwise infinite loops would
       # hold the MCP child process hostage and starve the chat's stdio pipe).
       SHELL_TIMEOUT_MS: "300000"
