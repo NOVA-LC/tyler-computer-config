@@ -270,13 +270,12 @@ mcpServers:
     chatMenu: true
 
   # Phase 3: Comet-style agentic browser via Microsoft's official Playwright MCP.
-  # Drives a real headless Chromium. First-call downloads Chromium binary
-  # (~200MB) so initTimeout must be generous.
-  # Tools include: browser_navigate, browser_click, browser_type,
-  # browser_take_screenshot, browser_evaluate, browser_snapshot, etc.
-  # If this fails to init on Railway (Chromium needs nss/fontconfig libs that
-  # the librechat-dev image may lack), fall back to a separate Railway service
-  # running mcr.microsoft.com/playwright with `--port` HTTP MCP.
+  # Drives a real headless Chromium.
+  # Phase 3.5: --user-data-dir points at a Railway volume mounted at /data, so
+  # the browser's cookies/localStorage/login sessions survive across chats and
+  # redeploys. Log into LinkedIn once, the AI can use that session for weeks.
+  # Note: NO --isolated flag — that flag forces a fresh profile per session,
+  # which is what we DON'T want for the persistence story.
   playwright:
     type: stdio
     command: npx
@@ -285,41 +284,7 @@ mcpServers:
       - "@playwright/mcp"
       - "--headless"
       - "--browser=chromium"
-      - "--isolated"
+      - "--user-data-dir=/data/chromium-profile"
     initTimeout: 300000
     timeout: 180000
-    chatMenu: true
-
-  # Phase 4: Cross-user shared memory for the Brown family.
-  # Default LibreChat memory is JWT-scoped (one user's chats can't see
-  # another's). This MCP punches a documented hole in that isolation for
-  # ONE shared knowledge layer: any family member can `remember` a fact,
-  # any other can `recall` it. Every fact is permanently attributed to its
-  # author via LibreChat's {{LIBRECHAT_USER_*}} env-var substitution, which
-  # the platform substitutes per-connection BEFORE spawning the stdio child.
-  #
-  # Source: https://github.com/NOVA-LC/family-memory-mcp
-  # Tools: remember, recall, list_recent, forget, who_said
-  # Storage: Mongo collection `family_facts` in the existing `test` db,
-  # reached via Railway's private network (no auth needed internally).
-  # Permissions: regular users can only `forget` their own facts; the ADMIN
-  # role (Tyler) can forget anyone's.
-  family-memory:
-    type: stdio
-    command: npx
-    args:
-      - -y
-      - "github:NOVA-LC/family-memory-mcp"
-    env:
-      MONGODB_URI: "mongodb://mongo.railway.internal:27017"
-      FAMILY_MEMORY_DB: "test"
-      FAMILY_MEMORY_COLLECTION: "family_facts"
-      LIBRECHAT_USER_ID: "{{LIBRECHAT_USER_ID}}"
-      LIBRECHAT_USER_EMAIL: "{{LIBRECHAT_USER_EMAIL}}"
-      LIBRECHAT_USER_USERNAME: "{{LIBRECHAT_USER_USERNAME}}"
-      LIBRECHAT_USER_ROLE: "{{LIBRECHAT_USER_ROLE}}"
-    # First call cold-installs the package from GitHub (~10-15s). Subsequent
-    # connections in the same container reuse npm's cache.
-    initTimeout: 60000
-    timeout: 60000
     chatMenu: true
