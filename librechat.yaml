@@ -3,7 +3,7 @@ cache: true
 
 # Hot-reloaded by Railway via CONFIG_PATH env var pointing to:
 # https://raw.githubusercontent.com/NOVA-LC/tyler-computer-config/main/librechat.yaml
-# Push to main â†’ restart api â†’ changes live.
+# Push to main → restart api → changes live.
 
 interface:
   customWelcome: "Welcome to Tyler-Computer. Family AI. Pick Claude (default) or a different model."
@@ -51,8 +51,12 @@ endpoints:
     titleConvo: true
     modelDisplayLabel: "Gemini"
 
-# Model presets â€” Claude Sonnet is the "default" because it's first in the list
-# AND prioritize: true sets it as the default for new conversations.
+# Model presets — Claude Sonnet is the default because prioritize: true picks
+# the first one with default: true on new conversations. Research preset uses
+# the same model but with a system prompt that forces web-search-then-cite
+# (Perplexity-style). User must enable the "searxng" MCP from the chat
+# dropdown for the model to actually call out to SearXNG; the prompt tells
+# it to do that.
 modelSpecs:
   enforce: false
   prioritize: true
@@ -64,6 +68,38 @@ modelSpecs:
         endpoint: "anthropic"
         model: "claude-sonnet-4-6"
         modelLabel: "Claude Sonnet"
+
+    - name: "research"
+      label: "🔎 Research (search the web + cite)"
+      preset:
+        endpoint: "anthropic"
+        model: "claude-sonnet-4-6"
+        modelLabel: "Research"
+        promptPrefix: |
+          You are a research assistant. For ANY factual claim, current event,
+          statistic, or "what's happening with X" type question, you MUST
+          call the `searxng` MCP tool to search the web BEFORE answering.
+
+          If the user hasn't enabled the `searxng` MCP server in their chat,
+          your first message must be exactly:
+            "Please enable the **searxng** MCP from the dropdown below your
+            text input, then re-send your question. (I need it for live
+            web search.)"
+
+          When you have search results, format your answer like this:
+
+          Your answer text with claims numbered like [1] and [2].
+
+          ## Sources
+          [1] Title of source one — https://example.com/path
+          [2] Title of source two — https://other.example.com/path
+
+          Rules:
+          - Always cite at least 2 independent sources for any non-trivial claim.
+          - Prefer recent sources (2024-2026) over older.
+          - If sources disagree, say so explicitly and cite each.
+          - If you can't find good sources, say "I couldn't find reliable
+            sources on this" — don't invent.
 
     - name: "claude-opus"
       label: "Claude Opus 4.7 (heavy reasoning)"
@@ -110,11 +146,11 @@ rateLimits:
     userMax: 50
     userWindowInMinutes: 60
 
-# MCP servers â€” same pattern as our local install.
+# MCP servers — same pattern as our local install.
 # Railway notes:
 #   - filesystem: rooted at /tmp/workspace inside the container (ephemeral until
 #     we add a Railway volume; survives chat sessions but is lost on redeploy).
-#   - railway: no env token â€” uses configure_api_token tool from chat on first
+#   - railway: no env token — uses configure_api_token tool from chat on first
 #     use (workaround for the GraphQL-during-init bug in @jasontanswe/railway-mcp).
 #   - mcp-searxng: requires SearXNG service in the same Railway project. Will be
 #     added in Phase 2; ${SEARXNG_URL} env var set on the LibreChat service to
@@ -162,7 +198,7 @@ mcpServers:
     args:
       - -y
       - "@jasontanswe/railway-mcp"
-    # NO env: RAILWAY_API_TOKEN here â€” skipping it makes the package
+    # NO env: RAILWAY_API_TOKEN here — skipping it makes the package
     # respond to MCP init in ~3s instead of timing out on Railway GraphQL
     # handshake. Set the token at runtime via `configure_api_token` tool
     # from chat. (Per LibreChat discussion #6629: initTimeout not honored.)
